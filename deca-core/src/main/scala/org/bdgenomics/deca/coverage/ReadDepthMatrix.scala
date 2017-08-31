@@ -25,9 +25,12 @@ import org.bdgenomics.adam.models.ReferenceRegion
  */
 
 case class ReadDepthMatrix(depth: IndexedRowMatrix, samples: Array[String], targets: Array[ReferenceRegion]) {
-  assert(
+  require(
     depth.numRows() == samples.length && depth.numCols() == targets.length,
-    "Size of depth matrix not consistent with samples and targets")
+    "Size of depth matrix (%dx%d) not consistent with samples (%d) and targets (%d)".format(
+      depth.numRows(), depth.numCols(),
+      samples.length,
+      targets.length))
 
   def cache() = depth.rows.cache()
 
