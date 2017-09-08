@@ -19,7 +19,7 @@
 
 # usage: deca-submit [<spark-args> --] <deca-args>
 
-set -e -x
+set -e
 
 # Split args into Spark and DECA args
 DD=False  # DD is "double dash"
