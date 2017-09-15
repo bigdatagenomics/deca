@@ -5,12 +5,12 @@
   <parent>
     <groupId>org.bdgenomics.deca</groupId>
     <artifactId>deca-parent_2.11</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version>0.1.0</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>deca-core_2.11</artifactId>
-  <version>0.0.1-SNAPSHOT</version>
+  <version>0.1.0</version>
   <packaging>jar</packaging>
   <name>deca-core: Core variant calling algorithms</name>
 
