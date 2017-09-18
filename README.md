@@ -210,7 +210,19 @@ instructions.
 
 Once Toil has been installed, the user will need to download and install the
 [bdgenomics.workflows](https://github.com/bigdatagenomics/workflows) package,
-which contains the DECA workflows. To install this package, run "make deploy":
+which contains the DECA workflows.
+
+#### Installing from PyPI
+
+For maximum convenience, `bdgenomics.workflows` is pip installable:
+
+```
+pip install bdgenomics.workflows==0.1.0
+```
+
+#### Installing from source
+
+To install this package, run "make deploy":
 
 ```
 git clone https://github.com/bigdatagenomics/workflows
