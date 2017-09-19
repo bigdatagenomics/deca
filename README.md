@@ -222,7 +222,7 @@ pip install bdgenomics.workflows==0.1.0
 
 #### Installing from source
 
-To install this package, run "make deploy":
+To install this package, run `make develop`:
 
 ```
 git clone https://github.com/bigdatagenomics/workflows
