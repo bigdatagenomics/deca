@@ -206,6 +206,8 @@ Toil](http://toil.readthedocs.io/en/3.10.1/gettingStarted/install.html#basic-ins
 To run the AWS workflow, the user will additionally need to follow the AWS setup
 instructions.
 
+*Note:* Support is currently limited to Python 2. Python 3 support is forthcoming.
+
 ### Installing the DECA Workflows
 
 Once Toil has been installed, the user will need to download and install the
