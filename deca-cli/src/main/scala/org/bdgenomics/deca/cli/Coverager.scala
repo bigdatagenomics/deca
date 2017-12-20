@@ -92,17 +92,17 @@ class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[Cover
         ARF.mateContigName,
         ARF.mateAlignmentStart,
         ARF.inferredInsertSize)
-      Projection(readFields)
+      Projection(readFields: _*)
     }
 
     val readsRdds = args.readsPaths.map(path => {
       // TODO: Add push down filters
       log.info("Loading {} alignment file", path)
-      sc.loadAlignments(path, projection = Some(readProj), stringency = ValidationStringency.SILENT)
+      sc.loadAlignments(path, optProjection = Some(readProj), stringency = ValidationStringency.SILENT)
     })
 
     val targetProj = Projection(FF.contigName, FF.start, FF.end)
-    val targetsAsFeatures = sc.loadFeatures(args.targetsPath, projection = Some(targetProj))
+    val targetsAsFeatures = sc.loadFeatures(args.targetsPath, optProjection = Some(targetProj))
 
     var matrix = Coverage.coverageMatrix(readsRdds, targetsAsFeatures, minMapQ = args.minMappingQuality)
 

@@ -107,18 +107,18 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
         ARF.mateContigName,
         ARF.mateAlignmentStart,
         ARF.inferredInsertSize)
-      Projection(readFields)
+      Projection(readFields: _*)
     }
 
     val readsRdds = args.readsPaths.map(path => {
       // TODO: Add push down filters
       log.info("Loading {} alignment file", path)
-      sc.loadAlignments(path, projection = Some(readProj), stringency = ValidationStringency.SILENT)
+      sc.loadAlignments(path, optProjection = Some(readProj), stringency = ValidationStringency.SILENT)
     })
 
     val targetsAsFeatures = {
       val targetProj = Projection(FF.contigName, FF.start, FF.end)
-      sc.loadFeatures(args.targetsPath, projection = Some(targetProj))
+      sc.loadFeatures(args.targetsPath, optProjection = Some(targetProj))
     }
 
     // 2. Compute coverage
@@ -151,6 +151,7 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
 
     // 4. Discover CNVs
     var features = HMM.discoverCNVs(zMatrix, M = args.M, T = args.T, p = args.p, D = args.D, minSomeQuality = args.minSomeQuality)
+      .addSequences(readsRdds.head.sequences)
     features.saveAsGff3(args.outputPath, asSingleFile = true)
   }
 }

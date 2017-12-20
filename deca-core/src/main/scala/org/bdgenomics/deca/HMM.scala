@@ -81,6 +81,6 @@ object HMM extends Serializable with Logging {
       })
     })
 
-    FeatureRDD.inferSequenceDictionary(cnvs, optStorageLevel = Some(StorageLevel.MEMORY_ONLY_SER))
+    FeatureRDD(cnvs)
   }
 }
