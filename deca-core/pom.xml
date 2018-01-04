@@ -153,12 +153,19 @@
       <artifactId>breeze_${scala.version.prefix}</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.scalanlp</groupId>
-      <artifactId>breeze-natives_${scala.version.prefix}</artifactId>
-    </dependency>
-    <dependency>
       <groupId>org.apache.spark</groupId>
       <artifactId>spark-mllib_${scala.version.prefix}</artifactId>
     </dependency>
   </dependencies>
+  <profiles>
+    <profile>
+      <id>native-lgpl</id>
+      <dependencies>
+	<dependency>
+          <groupId>org.scalanlp</groupId>
+          <artifactId>breeze-natives_${scala.version.prefix}</artifactId>
+	</dependency>
+      </dependencies>
+    </profile>
+  </profiles>
 </project>

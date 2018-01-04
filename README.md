@@ -99,6 +99,14 @@ WARN  BLAS:61 - Failed to load implementation from: com.github.fommil.netlib.Nat
 WARN  BLAS:61 - Failed to load implementation from: com.github.fommil.neltlib.NativeRefARPACK
 ```
 
+To build DECA with the optimized netlib native code in, you will need to invoke the `native-lgpl` profile when running Maven:
+
+```
+mvn package -P native-lgpl
+```
+
+We cannot package this code by default, as netlib is licensed under the LGPL and cannot be bundled in Apache 2 licensed code.
+
 # Example Usage 
 
 ## Running DECA in "stand-alone" mode on a workstation

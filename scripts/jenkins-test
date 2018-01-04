@@ -45,8 +45,18 @@ mvn clean \
     -Dhadoop.version=${HADOOP_VERSION} \
     -Dspark.version=${SPARK_VERSION} 
     
+# make sure we can build the native code
+mvn -U \
+    -P native-lgpl \
+    package \
+    -DskipTests \
+    -Dhadoop.version=${HADOOP_VERSION} \
+    -Dspark.version=${SPARK_VERSION} \
+    -DargLine=${DECA_MVN_TMP_DIR}
+
 # if those pass, build the distribution package and the integration tests
 mvn -U \
+    clean \
     test \
     -P coverage scoverage:report
 

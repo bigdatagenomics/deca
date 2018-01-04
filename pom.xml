@@ -414,11 +414,6 @@
         <version>${breeze.version}</version>
       </dependency>
       <dependency>
-        <groupId>org.scalanlp</groupId>
-        <artifactId>breeze-natives_${scala.version.prefix}</artifactId>
-        <version>${breeze.version}</version>
-      </dependency>
-      <dependency>
         <groupId>org.apache.spark</groupId>
         <artifactId>spark-mllib_${scala.version.prefix}</artifactId>
         <version>${spark.version}</version>
@@ -540,6 +535,18 @@
           </plugin>
         </plugins>
       </build>
+    </profile>
+    <profile>
+      <id>native-lgpl</id>
+      <dependencyManagement>
+	<dependencies>
+	  <dependency>
+            <groupId>org.scalanlp</groupId>
+            <artifactId>breeze-natives_${scala.version.prefix}</artifactId>
+            <version>${breeze.version}</version>
+	  </dependency>
+	</dependencies>
+      </dependencyManagement>
     </profile>
   </profiles>
 </project>
