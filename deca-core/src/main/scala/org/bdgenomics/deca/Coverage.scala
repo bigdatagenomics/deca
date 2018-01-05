@@ -171,71 +171,74 @@ object Coverage extends Serializable with Logging {
   def sortedCoverageCalculation(targets: Broadcast[Array[(ReferenceRegion, Int)]], reads: AlignmentRecordRDD): RDD[(Int, Double)] = {
     val targetsArray = targets.value
     reads.rdd.mapPartitions(readIter => {
+      if (!readIter.hasNext) {
+        Iterator[(Int, Double)]()
+      } else {
+        val coverageByTarget = new mutable.HashMap[Int, Long].withDefaultValue(0)
+        val potentialMateOverlap = new PotentialMateOverlap()
 
-      val coverageByTarget = new mutable.HashMap[Int, Long].withDefaultValue(0)
-      val potentialMateOverlap = new PotentialMateOverlap()
-
-      // Scan forward to identify any overlapping targets to compute depth. Return new first target for future searches
-      // as we advance through the reads
-      @tailrec def scanForward(read: RichAlignmentRecord, firstIndex: Int, targetIndex: Int, mateOverlap: Boolean): Int = {
-        if (targetIndex >= targetsArray.length)
-          return firstIndex
-        else {
-          val targetRegion = targetsArray(targetIndex)._1
-          if (readOverlapsTarget(read, targetRegion)) {
-
-            coverageByTarget(targetIndex) += totalCoverageOfRegion(targetRegion, read)
-            if (mateOverlap) {
-              // Slow path: Track potentially overlapping paired reads to more precisely calculate fragment coverage
-              potentialMateOverlap.addBinding(read, targetIndex)
-            }
-
-            return scanForward(read, firstIndex, targetIndex + 1, mateOverlap)
-          } else if (read.getContigName == targetRegion.referenceName && read.getStart >= targetRegion.end)
-            return scanForward(read, targetIndex + 1, targetIndex + 1, mateOverlap)
-          else
+        // Scan forward to identify any overlapping targets to compute depth. Return new first target for future searches
+        // as we advance through the reads
+        @tailrec def scanForward(read: RichAlignmentRecord, firstIndex: Int, targetIndex: Int, mateOverlap: Boolean): Int = {
+          if (targetIndex >= targetsArray.length)
             return firstIndex
+          else {
+            val targetRegion = targetsArray(targetIndex)._1
+            if (readOverlapsTarget(read, targetRegion)) {
+
+              coverageByTarget(targetIndex) += totalCoverageOfRegion(targetRegion, read)
+              if (mateOverlap) {
+                // Slow path: Track potentially overlapping paired reads to more precisely calculate fragment coverage
+                potentialMateOverlap.addBinding(read, targetIndex)
+              }
+
+              return scanForward(read, firstIndex, targetIndex + 1, mateOverlap)
+            } else if (read.getContigName == targetRegion.referenceName && read.getStart >= targetRegion.end)
+              return scanForward(read, targetIndex + 1, targetIndex + 1, mateOverlap)
+            else
+              return firstIndex
+          }
         }
+
+        // Find starting target of sorted reads once per partition
+        var firstRead = readIter.next()
+        var firstTarget = findFirstTarget(targetsArray, ReferenceRegion.unstranded(firstRead))
+        while (firstTarget.isDefined) {
+          var movingFirstTargetIndex = scanForward(
+            new RichAlignmentRecord(firstRead), firstTarget.get, firstTarget.get, couldOverlapMate(firstRead))
+
+          breakable {
+            readIter.foreach(read => {
+              // Crossed a contig boundary? Reset firstRead and firstTarget for coverage analysis of next contig
+              if (read.getContigName != firstRead.getContigName) {
+                firstRead = read
+                firstTarget = findFirstTarget(targetsArray, ReferenceRegion.unstranded(read))
+                break // Should happen infrequently
+              }
+
+              potentialMateOverlap.remove(read).foreach {
+                case (mate, targets) => targets.foreach(targetIndex => {
+                  coverageByTarget(targetIndex) -= fragmentOverlap(targetsArray(targetIndex)._1, mate, read)
+                })
+              }
+
+              movingFirstTargetIndex = scanForward(
+                new RichAlignmentRecord(read), movingFirstTargetIndex, movingFirstTargetIndex, couldOverlapMate(read))
+            })
+
+            firstTarget = None // Terminate while loop since we have exhausted all reads
+          }
+
+          potentialMateOverlap.clear()
+        }
+
+        coverageByTarget.map {
+          case (targetIndex, totalCoverage) => {
+            val target = targetsArray(targetIndex)
+            (target._2, totalCoverage.toDouble / target._1.length)
+          }
+        }.toIterator
       }
-
-      // Find starting target of sorted reads once per partition
-      var firstRead = readIter.next()
-      var firstTarget = findFirstTarget(targetsArray, ReferenceRegion.unstranded(firstRead))
-      while (firstTarget.isDefined) {
-        var movingFirstTargetIndex = scanForward(
-          new RichAlignmentRecord(firstRead), firstTarget.get, firstTarget.get, couldOverlapMate(firstRead))
-
-        breakable {
-          readIter.foreach(read => {
-            // Crossed a contig boundary? Reset firstRead and firstTarget for coverage analysis of next contig
-            if (read.getContigName != firstRead.getContigName) {
-              firstRead = read
-              firstTarget = findFirstTarget(targetsArray, ReferenceRegion.unstranded(read))
-              break // Should happen infrequently
-            }
-
-            potentialMateOverlap.remove(read).foreach {
-              case (mate, targets) => targets.foreach(targetIndex => {
-                coverageByTarget(targetIndex) -= fragmentOverlap(targetsArray(targetIndex)._1, mate, read)
-              })
-            }
-
-            movingFirstTargetIndex = scanForward(
-              new RichAlignmentRecord(read), movingFirstTargetIndex, movingFirstTargetIndex, couldOverlapMate(read))
-          })
-
-          firstTarget = None // Terminate while loop since we have exhausted all reads
-        }
-
-        potentialMateOverlap.clear()
-      }
-
-      coverageByTarget.map {
-        case (targetIndex, totalCoverage) => {
-          val target = targetsArray(targetIndex)
-          (target._2, totalCoverage.toDouble / target._1.length)
-        }
-      }.toIterator
     })
   }
 
