@@ -19,6 +19,7 @@ package org.bdgenomics.deca
 
 import org.apache.spark.SparkContext
 import org.apache.spark.storage.StorageLevel
+import org.bdgenomics.adam.models.SequenceDictionary
 import org.bdgenomics.adam.rdd.feature.FeatureRDD
 import org.bdgenomics.deca.Timers._
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
@@ -33,6 +34,7 @@ import org.bdgenomics.utils.misc.Logging
 object HMM extends Serializable with Logging {
 
   def discoverCNVs(readMatrix: ReadDepthMatrix,
+                   sequences: SequenceDictionary = SequenceDictionary.empty,
                    M: Double = 3, T: Double = 6, p: Double = 1e-8, D: Double = 70000,
                    minSomeQuality: Double = 30.0): FeatureRDD = DiscoverCNVs.time {
 
@@ -53,7 +55,7 @@ object HMM extends Serializable with Logging {
       val per_sample_cnvs = model.discoverCNVs(minSomeQuality)
 
       // Refine feature descriptions with coordinates, sample, etc.
-      per_sample_cnvs.map(raw_feature => {
+      per_sample_cnvs.flatMap(raw_feature => {
         val attr = raw_feature.getAttributes
 
         val start_index = attr.get("START_TARGET").toInt
@@ -62,25 +64,48 @@ object HMM extends Serializable with Logging {
         val start_target = targets.value(start_index)
         val end_target = targets.value(end_index)
 
-        // TODO: Filter out contig spanning CNVs
+        def process(builder: Feature.Builder): Feature = {
+          val innerAttr = raw_feature.getAttributes
 
-        val builder = Feature.newBuilder(raw_feature)
-        builder.setSource(samples.value(obs.index.toInt))
-        builder.setContigName(start_target.referenceName)
-        builder.setStart(start_target.start)
-        builder.setEnd(end_target.end)
-        builder.setStrand(Strand.INDEPENDENT)
+          builder.setSource(samples.value(obs.index.toInt))
+          builder.setStrand(Strand.INDEPENDENT)
 
-        // Transform START_TARGET and END_TARGET to be 1-indexed
-        attr.put("START_TARGET", (start_index + 1).toString)
-        attr.put("END_TARGET", (end_index + 1).toString)
+          // Transform START_TARGET and END_TARGET to be 1-indexed
+          innerAttr.put("START_TARGET", (start_index + 1).toString)
+          innerAttr.put("END_TARGET", (end_index + 1).toString)
 
-        builder.setAttributes(attr)
+          builder.setAttributes(innerAttr)
 
-        builder.build()
+          builder.build()
+        }
+
+        if (start_target.referenceName == end_target.referenceName) {
+          val builder = Feature.newBuilder(raw_feature)
+          builder.setContigName(start_target.referenceName)
+          builder.setStart(start_target.start)
+          builder.setEnd(end_target.end)
+
+          Iterable(process(builder))
+        } else {
+          val builder1 = Feature.newBuilder(raw_feature)
+          builder1.setContigName(start_target.referenceName)
+          builder1.setStart(start_target.start)
+          val optCl: Option[Long] = sequences(start_target.referenceName).map(_.length)
+          val cl: Long = optCl.getOrElse(Long.MaxValue)
+          val jcl: java.lang.Long = cl
+
+          builder1.setEnd(jcl)
+
+          val builder2 = Feature.newBuilder(raw_feature)
+          builder2.setContigName(end_target.referenceName)
+          builder2.setStart(0L)
+          builder2.setEnd(end_target.end)
+
+          Iterable(process(builder1), process(builder2))
+        }
       })
     })
 
-    FeatureRDD(cnvs)
+    FeatureRDD(cnvs, sequences)
   }
 }

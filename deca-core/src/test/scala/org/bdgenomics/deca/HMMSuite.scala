@@ -19,7 +19,7 @@ package org.bdgenomics.deca
 
 import breeze.linalg.DenseMatrix
 import breeze.numerics.abs
-import org.bdgenomics.adam.models.ReferenceRegion
+import org.bdgenomics.adam.models.{ ReferenceRegion, SequenceDictionary }
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.hmm.{ FixedMatrix, TransitionProbabilities }
 
@@ -71,7 +71,7 @@ class HMMSuite extends DecaFunSuite {
     //    HG00121   DEL  22:18898402-18913235   14.83   22    18905818   104..117    14         9         90       90              8         4         -2.51     37.99
     //    HG00113   DUP  22:17071768-17073440   1.67    22    17072604   4..11       8          25        99       99              53        25        4.00      197.73
 
-    val cnvs = HMM.discoverCNVs(matrix)
+    val cnvs = HMM.discoverCNVs(matrix, SequenceDictionary.empty)
     assert(cnvs.rdd.count === 2)
   }
 }
