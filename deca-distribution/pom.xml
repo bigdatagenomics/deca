@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.bdgenomics.deca</groupId>
     <artifactId>deca-parent_2.11</artifactId>
-    <version>0.1.1-SNAPSHOT</version>
+    <version>0.2.0</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   
