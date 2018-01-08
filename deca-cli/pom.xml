@@ -5,12 +5,12 @@
   <parent>
     <groupId>org.bdgenomics.deca</groupId>
     <artifactId>deca-parent_2.11</artifactId>
-    <version>0.2.0</version>
+    <version>0.2.1-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
   <artifactId>deca-cli_2.11</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1-SNAPSHOT</version>
   <packaging>jar</packaging>
   <name>deca-cli: Command line interface for a distributed variant caller</name>
 
