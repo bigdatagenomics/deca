@@ -325,12 +325,12 @@ bdg-deca \
   --minNodes <spark-workers + 2> \
   aws:<region>:<toil-jobstore>
 ```
-                                                                                                                               
+
 Toil will launch a cluster with `spark-workers + 2` worker nodes to run this
 workflow. For optimal performance, we recommend choosing a number of Apache
 Spark worker nodes such that you have no less than 256MB of data per core. All file paths used in AWS mode must be files stored
 in AWS’s S3 storage system, and must have an s3a:// URI scheme.
-                                                                                                                              
+
 # License
 
 DECA is released under an [Apache 2.0 license](LICENSE.txt).
