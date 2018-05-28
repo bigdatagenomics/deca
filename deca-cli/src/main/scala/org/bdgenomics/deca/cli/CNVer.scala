@@ -45,13 +45,13 @@ object CNVer extends BDGCommandCompanion {
 class CNVerArgs extends Args4jBase with CoverageArgs with NormalizeArgs with DiscoveryArgs {
   @Args4jOption(required = true,
     name = "-I",
-    usage = "One or more BAM, Parquet or other alignment files",
+    usage = "One or more BAM, Parquet or other alignment files supported by ADAM, or a list of alignment files",
     handler = classOf[StringArrayOptionHandler])
   var readsPaths: Array[String] = null
 
   @Args4jOption(required = true,
     name = "-L",
-    usage = "Targets for XHMM analysis as interval_list, BED or other feature file")
+    usage = "Targets for XHMM analysis as interval_list, BED, or other feature file supported by ADAM")
   var targetsPath: String = null
 
   @Args4jOption(required = true,

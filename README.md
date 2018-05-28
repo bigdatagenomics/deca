@@ -85,7 +85,7 @@ $ deca-submit normalize_and_discover --help
 Apache Spark includes the [Netlib-Java](https://github.com/fommil/netlib-java) library for high-performance linear algebra. 
 Netlib-Java can invoke optimized BLAS and Lapack system libraries if available; however, many Spark distributions are built 
 without Netlib-Java system library support. You may be able to use system libraries by including the DECA jar on 
-the Spark driver classpath, e.g.
+the Spark driver classpath when running locally, e.g.
 
 ```dtd
 deca-submit --driver-class-path $DECA_JAR ...
@@ -160,7 +160,7 @@ HG00121 DEL     22:18898402-18913235    14.83   22      18905818        104..117
 HG00113 DUP     22:17071768-17073440    1.67    22      17072604        4..11   8       25      99      99      53      25      4.00    197.73
 ```
 
-View a [recording](https://youtu.be/ADWasnNuRvk) of the above installation and CNV calling workflow executed on OSX.
+View a [recording](https://i.imgur.com/gp0D4B1.gifv) of the above installation and CNV calling workflow executed on OSX.
 
 To call CNVs from the original [BAM files](http://atgu.mgh.harvard.edu/xhmm/EXAMPLE_BAMS.zip):
 
@@ -213,126 +213,36 @@ deca-submit \
 Note that many of the parameters above, e.g. driver and executor cores and memory, are specific to a particular cluster 
 environment and would likely need to be modified for other environments.
 
-## Running DECA using Toil on a workstation or AWS
+## Running DECA on AWS with Elastic MapReduce
 
-We provide [Toil](http://www.ncbi.nlm.nih.gov/pubmed/28398314) workflows that allow DECA to be run either
-on a local computer or on a cluster on the Amazon Web Services (AWS) cloud.
-These workflows are written in Python and package DECA, Apache Spark, and Apache
-Hadoop using Docker containers. This packaging automates the setup of Apache Spark, reducing the barrier-to-entry for
-using DECA. To run either workflow, the user will need to [install
-Toil](http://toil.readthedocs.io/en/3.10.1/gettingStarted/install.html#basic-installation).
-To run the AWS workflow, the user will additionally need to follow the AWS setup
-instructions.
+DECA can readily be run on Amazon AWS using the Elastic MapReduce (EMR) [Spark configuration](https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-spark.html). Data can be read from and written to S3 using the s3a:// scheme. For example, the 1000 Genomes data is available as a [public dataset](https://aws.amazon.com/1000genomes/) on S3 in the `1000genomes` bucket (i.e. `s3a://1000genomes/...`). S3a is an overlay over the AWS Simple Storage System (S3) cloud data store which is provided by Apache Hadoop. 
 
-*Note:* Support is currently limited to Python 2. Python 3 support is forthcoming.
+DECA has been tested with emr-5.13. Clusters can be created with the command-line tools or the AWS management console. A bootstrap script `emr_bootstrap.sh` is provided in the scripts directory for use as a [bootstrap action](https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-plan-bootstrap.html). The bootstrap script can copy a pre-built JAR onto the cluster (faster) or build DECA directly from GitHub (slower). To use the bootstrap script, copy it to S3 and provide the S3 path as the bootstrap action when creating the cluster. To copy a pre-built JAR onto the cluster provide a s3 path to the DECA CLI jar, e.g. `s3://path/to/deca-cli_2.11-0.2.1-SNAPSHOT.jar`, as the optional argument to bootstrap action.
 
-### Installing the DECA Workflows
-
-Once Toil has been installed, the user will need to download and install the
-[bdgenomics.workflows](https://github.com/bigdatagenomics/workflows) package,
-which contains the DECA workflows.
-
-#### Installing from PyPI
-
-For maximum convenience, `bdgenomics.workflows` is pip installable:
+After connecting to the EMR master node via SSH, you can launch DECA as you would on any YARN cluster. For example the following command calls CNVs in the entire 1000 Genomes phase 3 cohort on a cluster consisting of 11 4-core r4.xlarge nodes (with a m4.large EMR master node).
 
 ```
-pip install bdgenomics.workflows==0.1.0
+deca-submit \
+    --master yarn \
+    --deploy-mode cluster \
+    --num-executors 10 \
+    --executor-memory 20G \
+    --executor-cores 4 \
+    --driver-memory 20G \
+    --driver-cores 4 \
+    --conf spark.driver.maxResultSize=0 \
+    --conf spark.kryo.registrationRequired=true \
+    --conf spark.default.parallelism=$(( 2 * 10 * 4 )) \
+    --conf spark.dynamicAllocation.enabled=false \
+    -- normalize_and_discover \
+    -min_partitions $(( 2 * 10 * 4 )) \
+    -exclude_targets "s3a://path/to/20130108.exome.targets.exclude.txt" \
+    -min_some_quality 29.5 \
+    -print_metrics \
+    -I "s3a://path/to/DATA.2535.RD.txt" \
+    -o "s3a://path/to/DATA.2535.RD.gff3"
 ```
 
-#### Installing from source
-
-To install this package, run `make develop`:
-
-```
-git clone https://github.com/bigdatagenomics/workflows
-cd workflows
-make develop
-```
-
-This step should be run inside of a Python virtualenv. If run locally, this step
-should be run inside of the same virtualenv that Toil was installed into. If run
-on AWS, this step should be run inside of a virtualenv that was created on the
-Toil AWS autoscaling cluster.
-
-### Input Files
-
-The DECA workflow takes two inputs:
-
-1. A feature file that defines the regions over which to call copy number
-   variants. This file can be formatted using any of the BED, GTF/GFF2, GFF3,
-   Interval List, or NarrowPeak formats. In the AWS workflow, the ADAM Parquet
-   Feature format is also supported.
-2. A manifest file that contains paths to a set of sorted BAM files. Each file
-   must have a scheme listed. In local mode, the file://, http://, and ftp://
-   schemes are supported. On AWS, the s3a://, http://, and ftp:// schemes are
-   supported. S3a is an overlay over the AWS Simple Storage System (S3) cloud
-   data store which is provided by Apache Hadoop.
-
-### Running Locally
-
-To run locally, we invoke the following command:
-
-```
-bdg-deca \
-  --targets <regions> \
-  --samples <manifest> \
-  --output-dir <path-to-save> \
-  --memory <memory-in-GB> \
-  --run-local \
-  file:<toil-jobstore-path>
-```
-
-This command will run in Toil’s single machine mode, and will save the CNV
-calls to `<path-to-save>/cnvs.gff`. `<toil-jobstore-path>` is the path to a
-temporary directory where Toil will save intermediate files. The
-`<memory-in-GB>` parameter should be specified without units; e.g., to allocate
-20GB of memory, pass "--memory 20".
-
-### Running on AWS
-
-To run on AWS, we rely on Toil’s AWS provisioner, which starts a cluster on the
-AWS cloud. Toil’s AWS provisioner runs on top of [Apache
-Mesos](https://mesos.apache.org) and supports dynamically scaling the number of
-nodes in the cluster to the amount of tasks being run. First, [create a Toil cluster on
-AWS](http://toil.readthedocs.io/en/3.10.1/running/amazon.html).
-
-Once the Toil cluster has launched, SSH onto the cluster, following the
-instructions provided in the Toil/AWS documentation. To install
-bdgenomics.workflows, run:
-
-```
-apt-get update
-apt-get install git
-git clone https://github.com/bigdatagenomics/workflows.git
-cd workflows
-virtualenv --system-site-packages venv
-. venv/bin/activate
-make develop
-```
-
-To run the DECA workflow, invoke the following command:
-
-```
-bdg-deca \
-  --targets <regions> \
-  --samples <manifest> \
-  --output-dir <path-to-save> \
-  --memory <memory-in-GB> \
-  --provisioner aws \
-  --batchSystem mesos \
-  --mesosMaster $(hostname -i):5050 \
-  --nodeType <type> \
-  --num-nodes <spark-workers + 1> \
-  --minNodes <spark-workers + 2> \
-  aws:<region>:<toil-jobstore>
-```
-                                                                                                                               
-Toil will launch a cluster with `spark-workers + 2` worker nodes to run this
-workflow. For optimal performance, we recommend choosing a number of Apache
-Spark worker nodes such that you have no less than 256MB of data per core. All file paths used in AWS mode must be files stored
-in AWS’s S3 storage system, and must have an s3a:// URI scheme.
-                                                                                                                              
 # License
 
 DECA is released under an [Apache 2.0 license](LICENSE.txt).
