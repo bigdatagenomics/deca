@@ -59,6 +59,11 @@ class NormalizingDiscovererArgs extends Args4jBase with NormalizeArgs with Disco
     usage = "Desired minimum number of partitions to be created when reading in XHMM matrix",
     handler = classOf[IntOptionArg])
   var minPartitions: Option[Int] = None
+
+  @Args4jOption(required = false,
+    name = "-multi_file",
+    usage = "Do not merge output files.")
+  var multiFile: Boolean = false
 }
 
 class NormalizingDiscoverer(protected val args: NormalizingDiscovererArgs) extends BDGSparkCommand[NormalizingDiscovererArgs] {
@@ -87,12 +92,12 @@ class NormalizingDiscoverer(protected val args: NormalizingDiscovererArgs) exten
     val zMatrix = ReadDepthMatrix(zRowMatrix, matrix.samples, zTargets)
     args.zScorePath.foreach(path => {
       zMatrix.cache()
-      Deca.writeXHMMMatrix(zMatrix, path, label = "Matrix")
+      Deca.writeXHMMMatrix(zMatrix, path, label = "Matrix", asSingleFile = !args.multiFile)
     })
 
     var features = HMM.discoverCNVs(zMatrix,
       M = args.M, T = args.T, p = args.p, D = args.D,
       minSomeQuality = args.minSomeQuality)
-    features.saveAsGff3(args.outputPath, asSingleFile = true)
+    features.saveAsGff3(args.outputPath, asSingleFile = !args.multiFile)
   }
 }

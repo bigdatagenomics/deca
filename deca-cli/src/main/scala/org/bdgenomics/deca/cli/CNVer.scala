@@ -81,6 +81,11 @@ class CNVerArgs extends Args4jBase with CoverageArgs with NormalizeArgs with Dis
     usage = "Desired number of partitions for read matrix. Defaults to number of samples.",
     handler = classOf[IntOptionArg])
   var numPartitions: Option[Int] = None
+
+  @Args4jOption(required = false,
+    name = "-multi_file",
+    usage = "Do not merge output files.")
+  var multiFile: Boolean = false
 }
 
 class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
@@ -146,12 +151,12 @@ class CNVer(protected val args: CNVerArgs) extends BDGSparkCommand[CNVerArgs] {
     val zMatrix = ReadDepthMatrix(zRowMatrix, rdMatrix.samples, zTargets)
     args.zScorePath.foreach(path => {
       zMatrix.cache()
-      Deca.writeXHMMMatrix(zMatrix, path, label = "Matrix")
+      Deca.writeXHMMMatrix(zMatrix, path, label = "Matrix", asSingleFile = !args.multiFile)
     })
 
     // 4. Discover CNVs
     var features = HMM.discoverCNVs(zMatrix, M = args.M, T = args.T, p = args.p, D = args.D, minSomeQuality = args.minSomeQuality)
       .addSequences(readsRdds.head.sequences)
-    features.saveAsGff3(args.outputPath, asSingleFile = true)
+    features.saveAsGff3(args.outputPath, asSingleFile = !args.multiFile)
   }
 }

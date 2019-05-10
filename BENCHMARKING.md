@@ -21,7 +21,7 @@ cluster node).
 
 ## Running DECA CNV discovery
 
-The specific command for running CNV discovery on the workstation:
+The specific command for running CNV discovery on the workstation is below.
 
 ```
 /usr/bin/time -f "%C\t%E\t%U\t%M\t%K" --append -o deca.time.txt \
@@ -42,7 +42,7 @@ The specific command for running CNV discovery on the workstation:
         -o DATA.2535.gff3
 ```
 
-and on the Hadoop cluster (with a varying number of executors, as set by the `$EXEC` variable):
+The specific command when running DECA on the Hadoop cluster (with a varying number of executors, as set by the `$EXEC` variable, and different minimum split sizes for HDFS, set by `$SPLIT_MB`) is below. The split size was set to generate one task per executor core during SVD (i.e. 152MB for 10 executor cores). The default value was 8MB.
 
 ```
 /usr/bin/time -f "%C\t%E\t%U\t%M\t%K" --append -o deca.time.txt \
@@ -58,11 +58,12 @@ and on the Hadoop cluster (with a varying number of executors, as set by the `$E
         --conf spark.yarn.executor.memoryOverhead=4096 \
         --conf spark.yarn.driver.memoryOverhead=4096 \
         --conf spark.kryo.registrationRequired=true \
-        --conf spark.hadoop.mapreduce.input.fileinputformat.split.minsize=8388608 \
-        --conf spark.default.parallelism=$(( 2 * $EXEC * 5 )) \
+        --conf spark.hadoop.mapreduce.input.fileinputformat.split.minsize=$(( $SPLIT_MB * 1024 * 1024 )) \
+        --conf spark.default.parallelism=$(( $EXEC * 5 )) \
         --conf spark.dynamicAllocation.enabled=false \
+        --conf spark.executor.extraJavaOptions="-XX:+UseG1GC -XX:InitiatingHeapOccupancyPercent=35" \
         -- normalize_and_discover \
-        -min_partitions $(( 2 * $EXEC * 5 )) \
+        -min_partitions $(( $EXEC * 5 )) \
         -exclude_targets hdfs://path/to/20130108.exome.targets.exclude.txt \
         -min_some_quality 29.5 \
         -print_metrics \
@@ -70,8 +71,58 @@ and on the Hadoop cluster (with a varying number of executors, as set by the `$E
         -o "hdfs://path/to/DATA.2535.gff3"
 ```
 
-The `20130108.exome.targets.exclude.txt` is the concatenation
-`20130108.exome.targets.gc.txt` and `20130108.exome.targets.lc.txt` files,
+The specific command when running DECA on AWS EMR on a cluster of 4 8-core i3.2xlarge nodes is below.
+
+```
+deca-submit \
+    --master yarn \
+    --deploy-mode cluster \
+    --num-executors 7 \
+    --executor-memory 22G \
+    --executor-cores 4 \
+    --driver-memory 22G \
+    --driver-cores 5 \
+    --conf spark.driver.maxResultSize=0 \
+    --conf spark.kryo.registrationRequired=true \
+    --conf spark.dynamicAllocation.enabled=false \
+    --conf spark.hadoop.mapreduce.input.fileinputformat.split.minsize=$(( 104 * 1024 * 1024 )) \
+    --conf spark.default.parallelism=28 \
+    --conf spark.executor.extraJavaOptions="-XX:+UseG1GC -XX:InitiatingHeapOccupancyPercent=35" \
+    -- normalize_and_discover \
+    -min_partitions 28 \
+    -exclude_targets "s3a://path/to/20130108.exome.targets.exclude.txt" \
+    -min_some_quality 29.5 \
+    -print_metrics \
+    -I "s3a://path/to/DATA.2535.RD.txt" \
+    -o "s3a://path/to/DATA.2535.RD.gff3" \
+    -multi_file
+```
+
+The specific command when running DECA on Databricks is below.
+
+```json
+[
+    "--class", "org.bdgenomics.deca.cli.DecaMain",
+    "--conf", "spark.serializer=org.apache.spark.serializer.KryoSerializer"
+    "--conf", "spark.kryo.registrator=org.bdgenomics.deca.serialization.DECAKryoRegistrator",
+    "--conf", "spark.kryo.registrationRequired=true",
+    "--conf", "spark.hadoop.fs.s3.impl=com.databricks.s3a.S3AFileSystem",
+    "--conf", "spark.hadoop.fs.s3a.impl=com.databricks.s3a.S3AFileSystem",
+    "--conf", "spark.hadoop.fs.s3n.impl=com.databricks.s3a.S3AFileSystem",
+    "--conf", "spark.hadoop.fs.s3a.canned.acl=BucketOwnerFullControl",
+    "--conf", "spark.hadoop.fs.s3a.acl.default=BucketOwnerFullControl",
+    "--conf", "spark.dynamicAllocation.enabled=true",
+    "s3://databricks-deca/deca-cli_2.11-0.2.1-SNAPSHOT.jar",
+    "normalize_and_discover",
+    "-exclude_targets", "s3a://path/to/20130108.exome.targets.exclude.txt",
+    "-min_some_quality", "29.5",
+    "-I", "s3a://path/to/DATA.2535.RD.txt",
+    "-o", "s3a://path/to/DATA.2535.RD.gff3",
+    "-multi_file"
+]
+```
+
+The `20130108.exome.targets.exclude.txt` file is the concatenation of `20130108.exome.targets.gc.txt` and `20130108.exome.targets.lc.txt` files,
 which are in turn generated from `20130108.exome.targets.interval_list` as
 described in the [XHMM
 tutorial](http://atgu.mgh.harvard.edu/xhmm/tutorial.shtml).

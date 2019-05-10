@@ -45,4 +45,6 @@ private[deca] object Timers extends Metrics {
   // org.bdgenomics.deca.HMM
   val DiscoverCNVs = timer("Discover CNVs from normalized read depth")
   val DiscoverCNVsSample = timer("Discover CNVS from normalized read depth in a single sample")
+  val ViterbiSample = timer("Viterbi algorithm in a single sample")
+  val ForwardSample = timer("Forward algorithm in a single sample")
 }

@@ -67,6 +67,11 @@ class CoveragerArgs extends Args4jBase with CoverageArgs {
     name = "-l",
     usage = "Input file is a list of paths")
   var readPathIsList: Boolean = false
+
+  @Args4jOption(required = false,
+    name = "-multi_file",
+    usage = "Do not merge output files.")
+  var multiFile: Boolean = false
 }
 
 class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[CoveragerArgs] {
@@ -106,6 +111,6 @@ class Coverager(protected val args: CoveragerArgs) extends BDGSparkCommand[Cover
 
     var matrix = Coverage.coverageMatrix(readsRdds, targetsAsFeatures, minMapQ = args.minMappingQuality)
 
-    Deca.writeXHMMMatrix(matrix, args.outputPath, label = "DECA._mean_cvg", format = "%.2f")
+    Deca.writeXHMMMatrix(matrix, args.outputPath, label = "DECA._mean_cvg", format = "%.2f", asSingleFile = !args.multiFile)
   }
 }

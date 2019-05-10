@@ -36,6 +36,13 @@ class FixedVector(val v0: BigDecimal, val v1: BigDecimal, val v2: BigDecimal) {
     new FixedVector(v0 * that.v0, v1 * that.v1, v2 * that.v2)
   }
 
+  def :*(that: FixedMatrix): FixedMatrix = {
+    new FixedMatrix(
+      v0 * that.v0_0, v1 * that.v1_0, v2 * that.v2_0,
+      v0 * that.v0_1, v1 * that.v1_1, v2 * that.v2_1,
+      v0 * that.v0_2, v1 * that.v1_2, v2 * that.v2_2)
+  }
+
   def *(that: FixedVector): BigDecimal = {
     v0 * that.v0 + v1 * that.v1 + v2 * that.v2
   }
@@ -55,6 +62,10 @@ class FixedVector(val v0: BigDecimal, val v1: BigDecimal, val v2: BigDecimal) {
     } else {
       if (v1 >= v2) 1 else 2
     }
+  }
+
+  override def toString() = {
+    s"FixedVector(${v0},${v1},${v2})"
   }
 }
 

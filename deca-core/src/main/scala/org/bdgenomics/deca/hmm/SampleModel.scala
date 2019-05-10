@@ -23,8 +23,7 @@ import org.apache.commons.math3.distribution.NormalDistribution
 import org.apache.spark.mllib.linalg.{ DenseVector => SDV, Vector => SV }
 import org.bdgenomics.deca.util.{ MLibUtils, Phred }
 import org.bdgenomics.formats.avro.{ Feature, OntologyTerm }
-
-import scala.collection.mutable.HashMap
+import org.bdgenomics.deca.Timers._
 
 /**
  * Created by mlinderman on 4/5/17.
@@ -41,6 +40,16 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     FixedVector(delDist.density(my_obs), dipDist.density(my_obs), dupDist.density(my_obs))
   }
 
+  private def doubleEmitDist(t: Int): FixedDoubleVector = {
+    val my_obs = obs(t)
+    FixedDoubleVector(delDist.density(my_obs), dipDist.density(my_obs), dupDist.density(my_obs))
+  }
+
+  private def logEmitDist(t: Int): FixedDoubleVector = {
+    val my_obs = obs(t)
+    FixedDoubleVector(delDist.logDensity(my_obs), dipDist.logDensity(my_obs), dupDist.logDensity(my_obs))
+  }
+
   private def emitDist(t: Int, kind: Int): Double = {
     val my_obs = obs(t)
     kind match {
@@ -51,12 +60,32 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     }
   }
 
+  private def logEmitDist(t: Int, kind: Int): Double = {
+    val my_obs = obs(t)
+    kind match {
+      case 0 => delDist.logDensity(my_obs)
+      case 1 => dipDist.logDensity(my_obs)
+      case 2 => dupDist.logDensity(my_obs)
+      case _ => throw new IndexOutOfBoundsException(kind + " not in 0-2")
+    }
+  }
+
   private def emitDistExclude(t: Int, kind: Int): FixedVector = {
     val my_obs = obs(t)
     kind match {
       case 0 => FixedVector(0.0, dipDist.density(my_obs), dupDist.density(my_obs))
       case 1 => FixedVector(delDist.density(my_obs), 0.0, dupDist.density(my_obs))
       case 2 => FixedVector(delDist.density(my_obs), dipDist.density(my_obs), 0.0)
+      case _ => throw new IndexOutOfBoundsException(kind + " not in 0-2")
+    }
+  }
+
+  private def doubleEmitDistExclude(t: Int, kind: Int): FixedDoubleVector = {
+    val my_obs = obs(t)
+    kind match {
+      case 0 => FixedDoubleVector(0.0, dipDist.density(my_obs), dupDist.density(my_obs))
+      case 1 => FixedDoubleVector(delDist.density(my_obs), 0.0, dupDist.density(my_obs))
+      case 2 => FixedDoubleVector(delDist.density(my_obs), dipDist.density(my_obs), 0.0)
       case _ => throw new IndexOutOfBoundsException(kind + " not in 0-2")
     }
   }
@@ -83,11 +112,51 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
 
     fwd(0) = FixedVector(p, 1 - 2 * p, p) :* emitDist(0)
     for (t <- 1 until obs.length) {
-      val trans = transProb.matrix(t)
-      fwd(t) = (fwd(t - 1) * trans) :* emitDist(t)
+      // Compute forward algorithm
+      fwd(t) = (fwd(t - 1) * transProb.matrix(t)) :* emitDist(t)
     }
 
     fwd
+  }
+
+  lazy val (scaledFwdCache, fwdScalingFactorCache) = {
+    val alpha_prime = Array.ofDim[FixedDoubleVector](obs.length)
+    val c = Array.ofDim[Double](obs.length)
+
+    { // t=0
+      val alpha_t = FixedDoubleVector(p, 1 - 2 * p, p) :* doubleEmitDist(0)
+      c(0) = alpha_t.sum()
+      alpha_prime(0) = alpha_t / c(0)
+    }
+
+    for (t <- 1 until obs.length) {
+      val alpha_t = (alpha_prime(t - 1) * transProb.doubleMatrix(t)) :* doubleEmitDist(t)
+      c(t) = alpha_t.sum()
+      alpha_prime(t) = alpha_t / c(t)
+    }
+
+    (alpha_prime, c)
+  }
+
+  lazy val hiddenCache = {
+    val backPointers = Array.ofDim[(Int, Int, Int)](obs.length)
+    var prevVit = FixedDoubleVector(math.log(p), math.log(1 - 2 * p), math.log(p)) :+ logEmitDist(0)
+    for (t <- 1 until obs.length) {
+      val emit = logEmitDist(t)
+      val (vt_0, incoming_0) = FixedDoubleVector.argmaxSum(prevVit, transProb.logTo(t, 0), emit.v0)
+      val (vt_1, incoming_1) = FixedDoubleVector.argmaxSum(prevVit, transProb.logTo(t, 1), emit.v1)
+      val (vt_2, incoming_2) = FixedDoubleVector.argmaxSum(prevVit, transProb.logTo(t, 2), emit.v2)
+
+      backPointers(t) = (incoming_0, incoming_1, incoming_2)
+      prevVit = FixedDoubleVector(vt_0, vt_1, vt_2)
+    }
+
+    val hidden = Array.ofDim[Int](obs.length)
+    hidden(obs.length - 1) = prevVit.argmax()
+    for (t <- (0 until obs.length - 1).reverse) {
+      hidden(t) = backPointers(t + 1).productElement(hidden(t + 1)).asInstanceOf[Int]
+    }
+    hidden
   }
 
   lazy val totalLikelihood = fwdCache(obs.length - 1).sum()
@@ -100,6 +169,19 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     prob / totalLikelihood
   }
 
+  def exact_probability(t1: Int, t2: Int, kind: Int, scaledBwd: FixedDoubleVector): Double = {
+    var prob = math.log(scaledFwdCache(t1)(kind)) + math.log(scaledBwd(kind))
+    for (t <- t1 + 1 to t2) {
+      prob += transProb.logEdge(t, kind, kind) + logEmitDist(t, kind)
+    }
+    // When t1 == t2, the scaling factor will get double counted
+    var missing_c = if (t1 == t2) -math.log(fwdScalingFactorCache(t1)) else 0
+    for (t <- t1 + 1 until t2) {
+      missing_c += math.log(fwdScalingFactorCache(t))
+    }
+    math.exp(prob - missing_c)
+  }
+
   def exclude_probability(t1: Int, t2: Int, exclude: Int, bwd: FixedVector): BigDecimal = {
     var fwd: FixedVector = if (t1 > 0) fwdCache(t1 - 1) else FixedVector.ZEROS
     for (t <- t1 to t2) {
@@ -109,9 +191,35 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
     (fwd * bwd) / totalLikelihood
   }
 
+  def exclude_probability(t1: Int, t2: Int, exclude: Int, scaledBwd: FixedDoubleVector): Double = {
+    var fwd: FixedDoubleVector = if (t1 > 0) scaledFwdCache(t1 - 1) else FixedDoubleVector.ZEROS
+    var c_T: Double = 0.0
+    for (t <- t1 to t2) {
+      val trans = transProb.doubleMatrix(t)
+      fwd = (fwd * trans) :* doubleEmitDistExclude(t, exclude)
+      val c = fwd.sum()
+      fwd = fwd / c
+      c_T += math.log(c)
+    }
+    var missing_c: Double = 0.0
+    for (t <- t1 until t2) {
+      missing_c += math.log(fwdScalingFactorCache(t))
+    }
+    math.exp(math.log(fwd * scaledBwd) + c_T - missing_c)
+  }
+
   def stop_probability(t2: Int, kind: Int, bwd: FixedVector): BigDecimal = {
     try {
       fwdCache(t2)(kind) * transProb.edge(t2 + 1, kind, 1) * emitDist(t2 + 1, 1) * bwd(1) / totalLikelihood
+    } catch {
+      case div0: ArithmeticException                     => 0.0
+      case end: java.lang.ArrayIndexOutOfBoundsException => 0.0
+    }
+  }
+
+  def stop_probability(t2: Int, kind: Int, scaledBwd: FixedDoubleVector): Double = {
+    try {
+      scaledFwdCache(t2)(kind) * transProb.edge(t2 + 1, kind, 1) * emitDist(t2 + 1, 1) * scaledBwd(1)
     } catch {
       case div0: ArithmeticException                     => 0.0
       case end: java.lang.ArrayIndexOutOfBoundsException => 0.0
@@ -125,33 +233,44 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
       0.0
   }
 
+  def start_probability(t1: Int, kind: Int, scaledBwd: FixedDoubleVector): Double = {
+    if (t1 > 0)
+      scaledFwdCache(t1 - 1)(1) * transProb.edge(t1, 1, kind) * emitDist(t1, kind) * scaledBwd(kind)
+    else
+      0.0
+  }
+
   def discoverCNVs(minSomeQuality: Double, qualFormat: String = "%.0f"): Seq[Feature] = {
     val features = scala.collection.mutable.ArrayBuffer.empty[Feature]
 
     // Compute backward probabilities without backward caching while looking for CNVs
-    var prevBwd = FixedVector.ONES
-    var currentCNV: (Int, Int, FixedVector, BigDecimal) = null
+    var scaledPrevBwd = FixedDoubleVector(1 / fwdScalingFactorCache(obs.length - 1))
+    var scaledCurrentCNV: (Int, Int, FixedDoubleVector, Double) = null
 
     for (t <- (0 until obs.length).reverse) {
-      val bwd = if (t == obs.length - 1) FixedVector.ONES else transProb.matrix(t + 1) * (emitDist(t + 1) :* prevBwd)
-      val gamma = fwdCache(t) :* bwd
+      //val bwd = if (t == obs.length - 1) FixedVector.ONES else transProb.matrix(t + 1) * (emitDist(t + 1) :* prevBwd)
+      val scaledBwd = if (t == obs.length - 1) {
+        scaledPrevBwd
+      } else {
+        (transProb.doubleMatrix(t + 1) * (doubleEmitDist(t + 1) :* scaledPrevBwd)) / fwdScalingFactorCache(t)
+      }
+      val kind = hiddenCache(t)
 
-      val kind = gamma.argmax()
-      if (kind != 1 && currentCNV == null) {
+      if (kind != 1 && scaledCurrentCNV == null) {
         // Start of a new CNV
-        currentCNV = (t, kind, bwd, Phred.phred(stop_probability(t, kind, prevBwd)))
-      } else if (currentCNV != null && (kind != currentCNV._2 || t == 0)) {
+        scaledCurrentCNV = (t, kind, scaledBwd, Phred.phred(stop_probability(t, kind, scaledPrevBwd)))
+      } else if (scaledCurrentCNV != null && (kind != scaledCurrentCNV._2 || t == 0)) {
         // End of a CNV and possibly the start of another
         val cnvStart = if (t > 0 || kind == 1) t + 1 else 0 // If we reach target 0 in a CNV
-        val (cnvEnd, cnvKind, cnvBwd, stopPhredPr) = currentCNV
+        val (cnvEnd, cnvKind, scaledCNVBwd, stopPhredPr) = scaledCurrentCNV
 
         // Compute the CNV quality scores
-        val dipPr = exact_probability(cnvStart, cnvEnd, 1, cnvBwd) // 1 => DIP
-        val somePhredPr = Phred.phred(exclude_probability(cnvStart, cnvEnd, excludeType(cnvKind), cnvBwd) - dipPr)
+        val dipPr = exact_probability(cnvStart, cnvEnd, 1, scaledCNVBwd) // 1 => DIP
+        val somePhredPr = Phred.phred(exclude_probability(cnvStart, cnvEnd, excludeType(cnvKind), scaledCNVBwd) - dipPr)
 
         if (somePhredPr >= minSomeQuality) {
-          val exactPhredPr = Phred.phred(exact_probability(cnvStart, cnvEnd, cnvKind, cnvBwd))
-          val startPhredPr = Phred.phred(start_probability(cnvStart, cnvKind, prevBwd))
+          val exactPhredPr = Phred.phred(exact_probability(cnvStart, cnvEnd, cnvKind, scaledCNVBwd))
+          val startPhredPr = Phred.phred(start_probability(cnvStart, cnvKind, scaledPrevBwd))
 
           val cnvAttr = new util.HashMap[String, String]()
           cnvAttr.put("START_TARGET", cnvStart.toString)
@@ -171,10 +290,10 @@ class SampleModel(obs: BDV[Double], transProb: TransitionProbabilities, M: Doubl
         }
 
         // Are we back to diploid, or did we start another different CNV
-        currentCNV = if (kind != 1) (t, kind, bwd, Phred.phred(stop_probability(t, kind, prevBwd))) else null
+        scaledCurrentCNV = if (kind != 1) (t, kind, scaledBwd, Phred.phred(stop_probability(t, kind, scaledPrevBwd))) else null
       }
 
-      prevBwd = bwd
+      scaledPrevBwd = scaledBwd
     }
 
     features

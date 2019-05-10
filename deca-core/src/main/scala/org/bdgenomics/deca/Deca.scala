@@ -77,7 +77,7 @@ object Deca extends Serializable with Logging {
     ReadDepthMatrix(matrix, samples, targets.zipWithIndex.collect { case (target, index) if toKeep(index) => target })
   }
 
-  def writeXHMMMatrix(matrix: ReadDepthMatrix, filePath: String, label: String = "Matrix", format: String = "%.8f") = WriteXHMMMatrix.time {
+  def writeXHMMMatrix(matrix: ReadDepthMatrix, filePath: String, label: String = "Matrix", format: String = "%.8f", asSingleFile: Boolean = true) = WriteXHMMMatrix.time {
     val sc = SparkContext.getOrCreate()
 
     val broadcastSamples = sc.broadcast(matrix.samples)
@@ -116,8 +116,10 @@ object Deca extends Serializable with Logging {
     // Write body files
     lines.saveAsTextFile(bodyPath.toString)
 
-    // Merge files into file result (does not preserve ordering of sample lines)
-    FileMerger.mergeFiles(conf, fs, new Path(filePath), new Path(bodyPath), Some(headPath))
+    if (asSingleFile) {
+      // Merge files into file result (does not preserve ordering of sample lines)
+      FileMerger.mergeFiles(conf, fs, new Path(filePath), new Path(bodyPath), Some(headPath))
+    }
   }
 
 }

@@ -25,4 +25,17 @@ object Phred {
     val actual = (-10.0 * math.log10(1.0 - prob.doubleValue()))
     math.min(actual, max)
   }
+
+  def phred(prob: Double, max: Double): Double = {
+    if (prob >= 1.0) { // Occurs due to numerical issues
+      max
+    } else {
+      val actual = (-10.0 * math.log10(1.0 - prob.doubleValue()))
+      math.min(actual, max)
+    }
+  }
+
+  def phred(prob: Double): Double = {
+    phred(prob, 99.0)
+  }
 }

@@ -22,6 +22,7 @@ import breeze.numerics.abs
 import org.bdgenomics.adam.models.{ ReferenceRegion, SequenceDictionary }
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.hmm.{ FixedMatrix, TransitionProbabilities }
+import org.bdgenomics.formats.avro.Feature
 
 /**
  * Created by mlinderman on 4/5/17.
@@ -33,10 +34,14 @@ class HMMSuite extends DecaFunSuite {
    */
   val thresh = 1e-8
 
-  def aboutEq(a: FixedMatrix, b: Array[Double], thresh: Double = thresh): Boolean = {
+  def aboutEq(a: FixedMatrix, b: Array[Double]): Boolean = {
     require(a.rows * a.cols == b.length, "Matrices must be the same size.")
     a.toArray.zip(b).forall(pair => (pair._1 - pair._2).abs < thresh)
 
+  }
+
+  def aboutEq(a: Double, b: Double): Boolean = {
+    (a - b).abs < thresh
   }
 
   sparkTest("Generates transition matrix for array of distances") {
@@ -73,5 +78,33 @@ class HMMSuite extends DecaFunSuite {
 
     val cnvs = HMM.discoverCNVs(matrix, SequenceDictionary.empty)
     assert(cnvs.rdd.count === 2)
+
+    val del = cnvs.rdd.filter(f => Option(f.getSource).exists(_.equals("HG00121"))).first()
+    assert(del.getFeatureType() == "DEL")
+    assert(del.getContigName() == "22")
+    assert(del.getStart() == 18898401L)
+    assert(del.getEnd() == 18913235L)
+    assert(aboutEq(del.getScore(), 9.167934190998345))
+
+    val del_attr = del.getAttributes()
+    assert(del_attr.get("Q_EXACT") == "9")
+    assert(del_attr.get("Q_SOME") == "90")
+    assert(del_attr.get("Q_NON_DIPLOID") == "90")
+    assert(del_attr.get("Q_START") == "8")
+    assert(del_attr.get("Q_STOP") == "4")
+
+    val dup = cnvs.rdd.filter(f => Option(f.getSource).exists(_.equals("HG00113"))).first()
+    assert(dup.getFeatureType() == "DUP")
+    assert(dup.getContigName() == "22")
+    assert(dup.getStart() == 17071767L)
+    assert(dup.getEnd() == 17073440L)
+    assert(aboutEq(dup.getScore(), 25.321428730083596))
+
+    val dup_attr = dup.getAttributes()
+    assert(dup_attr.get("Q_EXACT") == "25")
+    assert(dup_attr.get("Q_SOME") == "99")
+    assert(dup_attr.get("Q_NON_DIPLOID") == "99")
+    assert(dup_attr.get("Q_START") == "53")
+    assert(dup_attr.get("Q_STOP") == "25")
   }
 }

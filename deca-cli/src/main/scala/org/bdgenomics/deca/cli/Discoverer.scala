@@ -78,6 +78,11 @@ class DiscovererArgs extends Args4jBase with DiscoveryArgs {
     usage = "Desired minimum number of partitions to be created when reading in XHMM matrix",
     handler = classOf[IntOptionArg])
   var minPartitions: Option[Int] = None
+
+  @Args4jOption(required = false,
+    name = "-multi_file",
+    usage = "Do not merge output files.")
+  var multiFile: Boolean = false
 }
 
 class Discoverer(protected val args: DiscovererArgs) extends BDGSparkCommand[DiscovererArgs] {
@@ -86,6 +91,6 @@ class Discoverer(protected val args: DiscovererArgs) extends BDGSparkCommand[Dis
   def run(sc: SparkContext): Unit = {
     var matrix = Deca.readXHMMMatrix(args.inputPath, minPartitions = args.minPartitions)
     var features = HMM.discoverCNVs(matrix, M = args.M, T = args.T, p = args.p, D = args.D, minSomeQuality = args.minSomeQuality)
-    features.saveAsGff3(args.outputPath, asSingleFile = true)
+    features.saveAsGff3(args.outputPath, asSingleFile = !args.multiFile)
   }
 }

@@ -20,14 +20,11 @@ package org.bdgenomics.deca.hmm
 /**
  * Created by mlinderman on 4/7/17.
  */
-class FixedMatrix(
-    var v0_0: BigDecimal, var v1_0: BigDecimal, var v2_0: BigDecimal,
-    var v0_1: BigDecimal, var v1_1: BigDecimal, var v2_1: BigDecimal,
-    var v0_2: BigDecimal, var v1_2: BigDecimal, var v2_2: BigDecimal) {
+class FixedDoubleMatrix(
+    var v0_0: Double, var v1_0: Double, var v2_0: Double,
+    var v0_1: Double, var v1_1: Double, var v2_1: Double,
+    var v0_2: Double, var v1_2: Double, var v2_2: Double) {
 
-  def this(data: Array[BigDecimal]) = {
-    this(data(0), data(1), data(2), data(3), data(4), data(5), data(6), data(7), data(8))
-  }
   def this(data: Array[Double]) = {
     this(data(0), data(1), data(2), data(3), data(4), data(5), data(6), data(7), data(8))
   }
@@ -51,8 +48,8 @@ class FixedMatrix(
     }
   }
 
-  def *(that: FixedVector): FixedVector = {
-    new FixedVector(
+  def *(that: FixedDoubleVector): FixedDoubleVector = {
+    new FixedDoubleVector(
       v0_0 * that.v0 + v0_1 * that.v1 + v0_2 * that.v2,
       v1_0 * that.v0 + v1_1 * that.v1 + v1_2 * that.v2,
       v2_0 * that.v0 + v2_1 * that.v1 + v2_2 * that.v2)
@@ -83,10 +80,8 @@ class FixedMatrix(
     (col0, col1, col2)
   }
 
-  def toArray(): Array[BigDecimal] = {
+  def toArray(): Array[Double] = {
     Array(v0_0, v1_0, v2_0, v0_1, v1_1, v2_1, v0_2, v1_2, v2_2)
   }
 }
 
-object FixedMatrix {
-}

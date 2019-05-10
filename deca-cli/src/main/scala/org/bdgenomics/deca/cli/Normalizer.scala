@@ -112,6 +112,11 @@ class NormalizerArgs extends Args4jBase with NormalizeArgs {
     usage = "Desired minimum number of partitions to be created when reading in XHMM matrix",
     handler = classOf[IntOptionArg])
   var minPartitions: Option[Int] = None
+
+  @Args4jOption(required = false,
+    name = "-multi_file",
+    usage = "Do not merge output files.")
+  var multiFile: Boolean = false
 }
 
 class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[NormalizerArgs] {
@@ -137,7 +142,7 @@ class Normalizer(protected val args: NormalizerArgs) extends BDGSparkCommand[Nor
       initialKFraction = args.initialKFraction)
     val zMatrix = ReadDepthMatrix(zRowMatrix, matrix.samples, zTargets)
 
-    Deca.writeXHMMMatrix(zMatrix, args.outputPath, label = "Matrix")
+    Deca.writeXHMMMatrix(zMatrix, args.outputPath, label = "Matrix", asSingleFile = !args.multiFile)
 
   }
 }
