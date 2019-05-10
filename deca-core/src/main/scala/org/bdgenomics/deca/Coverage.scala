@@ -23,8 +23,8 @@ import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.mllib.linalg.distributed.{ IndexedRow, IndexedRowMatrix }
 import org.apache.spark.rdd.RDD
 import org.bdgenomics.adam.models.ReferenceRegion
-import org.bdgenomics.adam.rdd.feature.FeatureRDD
-import org.bdgenomics.adam.rdd.read.AlignmentRecordRDD
+import org.bdgenomics.adam.rdd.feature.FeatureDataset
+import org.bdgenomics.adam.rdd.read.AlignmentRecordDataset
 import org.bdgenomics.adam.rich.RichAlignmentRecord
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.util.MLibUtils
@@ -69,7 +69,7 @@ object Coverage extends Serializable with Logging {
 
   def totalCoverageOfRegion(region: ReferenceRegion, read: RichAlignmentRecord): Long = {
     // "Clip" bases when the insert size is shorter than the read length
-    val insert = read.getInferredInsertSize
+    val insert = read.getInsertSize
     val regionStart = if (insert != null && insert < 0) max(region.start, read.getEnd + insert - 1) else region.start
     val regionEnd = if (insert != null && insert > 0) min(region.end, read.getStart + insert + 1) else region.end
 
@@ -93,7 +93,7 @@ object Coverage extends Serializable with Logging {
 
   private def perBaseCoverageOfRegion(region: ReferenceRegion, pileup: DenseVector[Int], read: RichAlignmentRecord): DenseVector[Int] = {
     // "Clip" bases when the insert size is shorter than the read length
-    val insert = read.getInferredInsertSize
+    val insert = read.getInsertSize
     val regionStart = if (insert != null && insert < 0) max(region.start, read.getEnd + insert - 1) else region.start
     val regionEnd = if (insert != null && insert > 0) min(region.end, read.getStart + insert + 1) else region.end
 
@@ -138,12 +138,12 @@ object Coverage extends Serializable with Logging {
   }
 
   private def readOverlapsTarget(read: AlignmentRecord, target: ReferenceRegion): Boolean = {
-    read.getContigName == target.referenceName && read.getEnd() > target.start && read.getStart < target.end
+    read.getReferenceName == target.referenceName && read.getEnd() > target.start && read.getStart < target.end
   }
 
   private def couldOverlapMate(read: AlignmentRecord): Boolean = {
     read.getMateMapped &&
-      read.getMateContigName == read.getContigName &&
+      read.getMateReferenceName == read.getReferenceName &&
       read.getMateAlignmentStart >= read.getStart && read.getMateAlignmentStart < read.getEnd
   }
 
@@ -168,7 +168,7 @@ object Coverage extends Serializable with Logging {
     if (first < targets.length) Some(first) else None
   }
 
-  def sortedCoverageCalculation(targets: Broadcast[Array[(ReferenceRegion, Int)]], reads: AlignmentRecordRDD): RDD[(Int, Double)] = {
+  def sortedCoverageCalculation(targets: Broadcast[Array[(ReferenceRegion, Int)]], reads: AlignmentRecordDataset): RDD[(Int, Double)] = {
     val targetsArray = targets.value
     reads.rdd.mapPartitions(readIter => {
       if (!readIter.hasNext) {
@@ -193,7 +193,7 @@ object Coverage extends Serializable with Logging {
               }
 
               return scanForward(read, firstIndex, targetIndex + 1, mateOverlap)
-            } else if (read.getContigName == targetRegion.referenceName && read.getStart >= targetRegion.end)
+            } else if (read.getReferenceName == targetRegion.referenceName && read.getStart >= targetRegion.end)
               return scanForward(read, targetIndex + 1, targetIndex + 1, mateOverlap)
             else
               return firstIndex
@@ -210,7 +210,7 @@ object Coverage extends Serializable with Logging {
           breakable {
             readIter.foreach(read => {
               // Crossed a contig boundary? Reset firstRead and firstTarget for coverage analysis of next contig
-              if (read.getContigName != firstRead.getContigName) {
+              if (read.getReferenceName != firstRead.getReferenceName) {
                 firstRead = read
                 firstTarget = findFirstTarget(targetsArray, ReferenceRegion.unstranded(read))
                 break // Should happen infrequently
@@ -252,7 +252,7 @@ object Coverage extends Serializable with Logging {
     new IndexedRowMatrix(indexedRows, numSamples, numTargets.toInt)
   }
 
-  def coverageMatrix(readRdds: Seq[AlignmentRecordRDD], targets: FeatureRDD, minMapQ: Int = 0, numPartitions: Option[Int] = None): ReadDepthMatrix = ComputeReadDepths.time {
+  def coverageMatrix(readRdds: Seq[AlignmentRecordDataset], targets: FeatureDataset, minMapQ: Int = 0, numPartitions: Option[Int] = None): ReadDepthMatrix = ComputeReadDepths.time {
     // Sequence dictionary parsing is broken in current ADAM release:
     //    https://github.com/bigdatagenomics/adam/issues/1409
     // which breaks the desired sorting of the targets. Upgrading to a newer version of ADAM did not fix the issues as
@@ -273,10 +273,10 @@ object Coverage extends Serializable with Logging {
     // TODO: Verify inputs, e.g. BAM files, are in sorted order
 
     val samplesDriver = readRdds.map(readsRdd => {
-      val samples = readsRdd.recordGroups.toSamples
+      val samples = readsRdd.readGroups.toSamples
       if (samples.length > 1)
         throw new IllegalArgumentException("reads RDD must be a single sample")
-      samples.head.getSampleId
+      samples.head.getId
     }).toArray
 
     val numSamples = readRdds.length
@@ -291,7 +291,7 @@ object Coverage extends Serializable with Logging {
               !read.getFailedVendorQualityChecks &&
               read.getPrimaryAlignment &&
               read.getReadMapped &&
-              (minMapQ == 0 || read.getMapq >= minMapQ)
+              (minMapQ == 0 || read.getMappingQuality >= minMapQ)
           }))
 
           sortedCoverageCalculation(broadcastTargetArray, filteredReadsRdd)

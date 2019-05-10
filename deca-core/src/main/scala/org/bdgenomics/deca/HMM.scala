@@ -20,12 +20,12 @@ package org.bdgenomics.deca
 import org.apache.spark.SparkContext
 import org.apache.spark.storage.StorageLevel
 import org.bdgenomics.adam.models.SequenceDictionary
-import org.bdgenomics.adam.rdd.feature.FeatureRDD
+import org.bdgenomics.adam.rdd.feature.FeatureDataset
 import org.bdgenomics.deca.Timers._
 import org.bdgenomics.deca.coverage.ReadDepthMatrix
 import org.bdgenomics.deca.hmm.{ SampleModel, TransitionProbabilities }
 import org.bdgenomics.deca.util.MLibUtils
-import org.bdgenomics.formats.avro.{ Feature, Strand }
+import org.bdgenomics.formats.avro.{ Feature, Sample, Strand }
 import org.bdgenomics.utils.misc.Logging
 
 /**
@@ -36,7 +36,7 @@ object HMM extends Serializable with Logging {
   def discoverCNVs(readMatrix: ReadDepthMatrix,
                    sequences: SequenceDictionary = SequenceDictionary.empty,
                    M: Double = 3, T: Double = 6, p: Double = 1e-8, D: Double = 70000,
-                   minSomeQuality: Double = 30.0): FeatureRDD = DiscoverCNVs.time {
+                   minSomeQuality: Double = 30.0): FeatureDataset = DiscoverCNVs.time {
 
     val sc = SparkContext.getOrCreate()
 
@@ -81,14 +81,14 @@ object HMM extends Serializable with Logging {
 
         if (start_target.referenceName == end_target.referenceName) {
           val builder = Feature.newBuilder(raw_feature)
-          builder.setContigName(start_target.referenceName)
+          builder.setReferenceName(start_target.referenceName)
           builder.setStart(start_target.start)
           builder.setEnd(end_target.end)
 
           Iterable(process(builder))
         } else {
           val builder1 = Feature.newBuilder(raw_feature)
-          builder1.setContigName(start_target.referenceName)
+          builder1.setReferenceName(start_target.referenceName)
           builder1.setStart(start_target.start)
           val optCl: Option[Long] = sequences(start_target.referenceName).map(_.length)
           val cl: Long = optCl.getOrElse(Long.MaxValue)
@@ -97,7 +97,7 @@ object HMM extends Serializable with Logging {
           builder1.setEnd(jcl)
 
           val builder2 = Feature.newBuilder(raw_feature)
-          builder2.setContigName(end_target.referenceName)
+          builder2.setReferenceName(end_target.referenceName)
           builder2.setStart(0L)
           builder2.setEnd(end_target.end)
 
@@ -106,6 +106,6 @@ object HMM extends Serializable with Logging {
       })
     })
 
-    FeatureRDD(cnvs, sequences)
+    FeatureDataset(cnvs, sd = sequences, samples = Seq.empty[Sample])
   }
 }
