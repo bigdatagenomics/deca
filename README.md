@@ -113,7 +113,7 @@ We cannot package this code by default, as netlib is licensed under the LGPL and
 
 A small dataset (30 samples by 300 targets) is distributed as part of the [XHMM tutorial](http://atgu.mgh.harvard.edu/xhmm/tutorial.shtml). 
 An example DECA command to call CNVs from the [pre-computed read-depth matrix and related files](http://atgu.mgh.harvard.edu/xhmm/RUN.zip)
-on a 16-core workstation with 128 GB RAM is below. Note that you will need to set the `DECA_JAR` environment variable to point to the jar file created by `mvn package`, set `spark.local.dir` to a suitable temporary directory for your system and likely need to change the executor and driver memory to suitable values for your system. The `exclude_targets.txt` and `DATA.RD.txt` files from the XHMM tutorial data are also distributed as part of the DECA test resources in the `deca-core/src/test/resources/` directory.
+on a 16-core workstation with 128 GB RAM is shown below; a step-by-step listing of the commands to call CNVs in the tutorial data is available [here](TUTORIAL.md). Note that you will need to set the `DECA_JAR` environment variable to point to the jar file created by `mvn package`, set `spark.local.dir` to a suitable temporary directory for your system and likely need to change the executor and driver memory to suitable values for your system. The `exclude_targets.txt` and `DATA.RD.txt` files from the XHMM tutorial data are also distributed as part of the DECA test resources in the `deca-core/src/test/resources/` directory.
 
 From within the unzip'd RUN directory, prepare `exclude_targets.txt`:
 
