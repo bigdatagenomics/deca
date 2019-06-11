@@ -174,7 +174,7 @@ deca-submit \
 --executor-memory 96G --driver-memory 16G \
 -- coverage \
 -L EXOME.interval_list \
--I *.bam 
+-I *.bam \
 -o DECA.RD.txt
 ```
 
