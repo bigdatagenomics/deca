@@ -130,7 +130,7 @@ deca-submit \
 --conf spark.local.dir=/path/to/temp/directory \
 --conf spark.driver.maxResultSize=0 \
 --conf spark.kryo.registrationRequired=true \
---executor-memory 96G --driver-memory 16G \
+--driver-memory 16G \
 -- normalize_and_discover \
 -min_some_quality 29.5 \
 -exclude_targets exclude_targets.txt \
@@ -171,7 +171,7 @@ deca-submit \
 --conf spark.local.dir=/path/to/temp/directory \
 --conf spark.driver.maxResultSize=0 \
 --conf spark.kryo.registrationRequired=true \
---executor-memory 96G --driver-memory 16G \
+--driver-memory 16G \
 -- coverage \
 -L EXOME.interval_list \
 -I *.bam \
