@@ -5,6 +5,10 @@ DECA: Distributed Exome CNV Analyzer
 
 DECA is a distributed re-implementation of the [XHMM](https://atgu.mgh.harvard.edu/xhmm/) exome CNV caller using ADAM and Apache Spark.
 
+If you use DECA please cite:
+
+Linderman MD, Chia D, Wallace F, Nothaft FA. DECA: scalable XHMM exome copy-number variant calling with ADAM and Apache Spark. BMC Bioinformatics. 2019;20:493. [doi:10.1186/s12859-019-3108-7](https://doi.org/10.1186/s12859-019-3108-7).
+
 # Getting Started
 
 ## Installation
