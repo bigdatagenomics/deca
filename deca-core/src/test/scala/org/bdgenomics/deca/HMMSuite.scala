@@ -81,7 +81,7 @@ class HMMSuite extends DecaFunSuite {
 
     val del = cnvs.rdd.filter(f => Option(f.getSource).exists(_.equals("HG00121"))).first()
     assert(del.getFeatureType() == "DEL")
-    assert(del.getContigName() == "22")
+    assert(del.getReferenceName() == "22")
     assert(del.getStart() == 18898401L)
     assert(del.getEnd() == 18913235L)
     assert(aboutEq(del.getScore(), 9.167934190998345))
@@ -95,7 +95,7 @@ class HMMSuite extends DecaFunSuite {
 
     val dup = cnvs.rdd.filter(f => Option(f.getSource).exists(_.equals("HG00113"))).first()
     assert(dup.getFeatureType() == "DUP")
-    assert(dup.getContigName() == "22")
+    assert(dup.getReferenceName() == "22")
     assert(dup.getStart() == 17071767L)
     assert(dup.getEnd() == 17073440L)
     assert(aboutEq(dup.getScore(), 25.321428730083596))
